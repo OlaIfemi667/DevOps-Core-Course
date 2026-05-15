@@ -1,0 +1,149 @@
+import os
+import json
+import logging
+import socket
+
+
+
+from datetime import datetime
+
+import uvicorn
+import platform
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+
+#------------------Fonctions---------------------------------
+start_time = datetime.now()
+
+
+def getSystemInformation():
+    hostname = socket.gethostname()
+    plaform_version = platform.version()
+    platform_name = platform.system()
+    architecture = platform.machine()
+    python_version = platform.python_version()
+    cpu_count = os.cpu_count()
+    
+    return {
+            "hostname": hostname,
+            "platform": platform_name,
+            "platform_version": plaform_version,
+            "architecture": architecture,
+            "cpu_count": cpu_count,
+            "python_version": python_version
+            }
+
+
+def getService():
+    return {
+            "name": "devops-info-service",
+            "version": "1.0.0",
+            "description": "DevOps course info service",
+            "framework": "Flask"
+            }
+
+
+def get_uptime():
+    delta = datetime.now() - start_time
+    seconds = int(delta.total_seconds())
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    return {
+        'seconds': seconds,
+        'human': f"{hours} hours, {minutes} minutes"
+    }
+
+
+def getRuntime():
+    delta = datetime.now() - start_time
+    seconds = int(delta.total_seconds())
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+
+    # la timezone
+    time_now = datetime.now()
+    local_now = time_now.astimezone()
+    local_tz = local_now.tzinfo
+    local_tzname = local_tz.tzname(local_now)
+
+    return {
+        "uptime_seconds": seconds,
+        "uptime_human": f"{hours} hours, {minutes} minutes",
+        "current_time": time_now,
+        "timezone": local_tzname
+    }
+
+
+def getRequestInfo(request: Request):
+    return {
+            "client_ip": request.client.host,
+            "user_agent": request.headers.get('user-agent'),
+            "method": request.method,
+            "path": request.url.path
+            }
+
+
+#--------------------logging----------------------------
+def getLogging(request: Request):
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        filename="debug.log"
+    )
+    logger = logging.getLogger(__name__)
+
+    logger.info('Application starting...')
+    logger.info('Man-debugger')
+    logger.debug(f'Request: Ola{request.method} {request.url.path}')
+
+
+#--------------------app----------------------------------------
+
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', 5000))
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+app = FastAPI(debug=DEBUG)
+
+@app.get("/")
+def read_root(request:Request):
+    getLogging(request)
+    return {
+            "service": getService(),
+            "system": getSystemInformation(),
+            "runtime": getRuntime(),
+            "request": getRequestInfo(request),
+            "endpoints": [
+                {"path": "/", "method": "GET", "description": "Service information"},
+                {"path": "/health", "method": "GET", "description": "Health check"}
+                ]
+            }
+
+@app.get("/health")
+def read_health(request: Request):
+    getLogging(request)
+    return {
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'uptime_seconds': get_uptime()['seconds']
+    }
+#---------------------Error handlers----------------
+
+@app.exception_handler(404)
+def custom_404_handler(request: Request, __):
+    getLogging(request)
+    return JSONResponse({
+            "error": "404 not Found",
+            "message": "Endpoint does not exist"
+            })
+
+@app.exception_handler(500)
+def custom_500_handler(request: Request, __):
+    getLogging(request)
+    return JSONResponse({
+            "error": "505 internal Server Error",
+            "message": "An unexpected error occurred"
+            })
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host=HOST, port=PORT)
