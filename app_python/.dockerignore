@@ -1,0 +1,11 @@
+venv/
+.venv/
+__pycache__/
+.git/
+.cache/
+dist/
+build/
+target/
+node_modules/
+data/
+models/
